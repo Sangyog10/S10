@@ -82,7 +82,8 @@ const verifyOtp = catchAsyncError(async (req, res, next) => {
 });
 
 const addUserDetails = catchAsyncError(async (req, res, next) => {
-  const { phoneNumber, name, email } = req.body;
+  const { name, email } = req.body;
+  const phoneNumber = req.user.phone;
 
   if (!phoneNumber || !name || !email) {
     return res.status(400).json({
