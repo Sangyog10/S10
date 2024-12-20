@@ -1,7 +1,8 @@
 import app from "./app.js";
 import { config } from "dotenv";
-// import connectDB from "./config/database.js";
-//handling uncaught
+import { connectDb } from "./db/index.js";
+
+config();
 
 process.on("uncaughtException", (err) => {
   console.log(`Error: ${err.message}`);
@@ -9,14 +10,14 @@ process.on("uncaughtException", (err) => {
   process.exit(1);
 });
 
-config();
-// connectDB();
+const server = async () => {
+  await connectDb();
+  app.listen(process.env.PORT, "0.0.0.0", () => {
+    console.log(`Server is running on http://localhost:${process.env.PORT}`);
+  });
+};
+server();
 
-const server = app.listen(process.env.PORT, "0.0.0.0", () => {
-  console.log(`Server is running on http://localhost:${process.env.PORT}`);
-});
-
-//Unhandled Promise Rejection
 process.on("unhandledRejection", (err) => {
   console.log(`Error : ${err.message}`);
   console.log(`Shutting Down the server due to unhandled promise rejection`);
