@@ -1,10 +1,6 @@
 import { prismaClient } from "../db/index.js";
 import catchAsyncError from "../middlewares/catch-async-errors.js";
-import {
-  isTokenValid,
-  attachCookiesToResponse,
-  createTokenUser,
-} from "../utils/jwt.js";
+import { attachCookiesToResponse } from "../utils/jwt.js";
 import ErrorHandler from "../utils/error-handler.js";
 import { generateOTP } from "../utils/generate-otp.js";
 
@@ -75,9 +71,18 @@ const verifyOtp = catchAsyncError(async (req, res, next) => {
   const tokenUser = { phone: user.phoneNumber };
   attachCookiesToResponse({ res, user: tokenUser });
 
+  if (user.name === null && user.email === null) {
+    res.status(200).json({
+      success: true,
+      message: "OTP verified successfully, Add additional details",
+      isNewUser: true,
+    });
+  }
+
   res.status(200).json({
     success: true,
     message: "OTP verified successfully",
+    isNewUser: false,
   });
 });
 
