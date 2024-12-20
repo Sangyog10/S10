@@ -5,13 +5,19 @@ import { config } from "dotenv";
 import cors from "cors";
 import morgan from "morgan";
 
+import authRouter from "./routes/auth.routes.js";
+
 config();
 
 const app = express();
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
-app.use(cookieParser());
+app.use(
+  cookieParser(process.env.jwtSecret, {
+    signed: true,
+  })
+);
 app.use(
   cors({
     origin: [
@@ -26,6 +32,8 @@ app.use(
   })
 );
 app.use(morgan("dev"));
+
+app.use("/api/v1/auth", authRouter);
 
 app.get("/", (req, res) => {
   res.status(200).json({
