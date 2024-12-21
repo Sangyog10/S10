@@ -33,7 +33,6 @@ app.get("/", (req, res) => {
   res.status(200).json({
     success: true,
     message: "Welcome to Shop Infinity ",
-    author: "Sangyog Puri",
   });
 });
 
