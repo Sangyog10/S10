@@ -4,8 +4,10 @@ import { attachCookiesToResponse } from "../utils/jwt.js";
 import ErrorHandler from "../utils/error-handler.js";
 import { generateOTP } from "../utils/generate-otp.js";
 
+const OTP_VALIDITY_PERIOD = 1 * 60 * 1000; // 1 minutes
+
 const registerUserByPhone = catchAsyncError(async (req, res, next) => {
-  const { phoneNumber } = await req.body;
+  const { phoneNumber } = req.body;
   if (!phoneNumber) {
     return next(new ErrorHandler("Please enter your phone number", 400));
   }
@@ -16,24 +18,11 @@ const registerUserByPhone = catchAsyncError(async (req, res, next) => {
     data: {
       phoneNumber,
       otp: generatedOtp,
+      createdAt: new Date(),
     },
   });
 
   console.log(`OTP for ${phoneNumber}: ${generatedOtp}`);
-
-  await prismaClient.user.upsert({
-    where: {
-      phoneNumber,
-    },
-    update: {
-      updatedAt: new Date(),
-    },
-    create: {
-      phoneNumber,
-      name: null,
-      email: null,
-    },
-  });
 
   res.status(200).json({
     success: true,
@@ -41,48 +30,53 @@ const registerUserByPhone = catchAsyncError(async (req, res, next) => {
   });
 });
 
-//otp Verification
 const verifyOtp = catchAsyncError(async (req, res, next) => {
-  const { phoneNumber, otp } = await req.body;
+  const { phoneNumber, otp } = req.body;
   if (!otp || !phoneNumber) {
     return next(
-      new ErrorHandler("Please enter your otp and  phone number", 400)
+      new ErrorHandler("Please enter your OTP and phone number", 400)
     );
   }
 
   const storedOtp = await prismaClient.oTP.findFirst({
-    where: {
-      phoneNumber,
-      otp,
-    },
+    where: { phoneNumber, otp },
   });
 
   if (!storedOtp) {
-    return next(new ErrorHandler("Invalid or expired OTP", 400));
+    return next(new ErrorHandler("Invalid OTP", 400));
   }
+
+  const isExpired =
+    new Date() - new Date(storedOtp.createdAt) > OTP_VALIDITY_PERIOD;
+  if (isExpired) {
+    await prismaClient.oTP.delete({ where: { id: storedOtp.id } }); //delete otp after it expires
+    return next(new ErrorHandler("OTP has expired", 400));
+  }
+
+  //deleting the otp after success
   await prismaClient.oTP.delete({ where: { id: storedOtp.id } });
 
-  //attach jwt
-  const user = await prismaClient.user.findUnique({
-    where: {
-      phoneNumber,
-    },
-  });
+  let user = await prismaClient.user.findUnique({ where: { phoneNumber } });
+
+  if (!user) {
+    user = await prismaClient.user.create({
+      data: {
+        phoneNumber,
+        name: null,
+        email: null,
+      },
+    });
+  }
+
   const tokenUser = { phone: user.phoneNumber };
   attachCookiesToResponse({ res, user: tokenUser });
 
-  if (user.name === null && user.email === null) {
-    res.status(200).json({
-      success: true,
-      message: "OTP verified successfully, Add additional details",
-      isNewUser: true,
-    });
-  }
+  const isNewUser = !user.name && !user.email;
 
   res.status(200).json({
     success: true,
     message: "OTP verified successfully",
-    isNewUser: false,
+    isNewUser,
   });
 });
 
@@ -116,25 +110,19 @@ const addUserDetails = catchAsyncError(async (req, res, next) => {
     });
   }
 
-  if (existingUser.name && existingUser.email) {
-    return res.status(400).json({
-      success: false,
-      message: "User is already registered.",
-    });
-  }
-
   await prismaClient.user.update({
     where: { id: existingUser.id },
     data: {
-      name: existingUser.name || name,
-      email: existingUser.email || email,
+      name,
+      email,
       updatedAt: new Date(),
     },
   });
 
-  res
-    .status(201)
-    .json({ success: true, message: "User registered successfully." });
+  res.status(200).json({
+    success: true,
+    message: "User details added successfully.",
+  });
 });
 
 export { registerUserByPhone, verifyOtp, addUserDetails };

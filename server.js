@@ -12,17 +12,21 @@ process.on("uncaughtException", (err) => {
 
 const server = async () => {
   await connectDb();
-  app.listen(process.env.PORT, "0.0.0.0", () => {
+
+  const serverInstance = app.listen(process.env.PORT, "0.0.0.0", () => {
     console.log(`Server is running on http://localhost:${process.env.PORT}`);
   });
+
+  return serverInstance;
 };
-server();
+
+const serverInstance = await server();
 
 process.on("unhandledRejection", (err) => {
-  console.log(`Error : ${err.message}`);
-  console.log(`Shutting Down the server due to unhandled promise rejection`);
+  console.log(`Error: ${err.message}`);
+  console.log(`Shutting down the server due to unhandled promise rejection`);
 
-  server.close(() => {
+  serverInstance.close(() => {
     process.exit(1);
   });
 });
