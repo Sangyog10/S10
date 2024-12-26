@@ -1,6 +1,5 @@
 import express from "express";
 import errorMiddleware from "./middlewares/error.js";
-import cookieParser from "cookie-parser";
 import { config } from "dotenv";
 import cors from "cors";
 import morgan from "morgan";
@@ -13,11 +12,6 @@ const app = express();
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
-app.use(
-  cookieParser(process.env.jwtSecret, {
-    signed: true,
-  })
-);
 app.use(
   cors({
     origin: ["*", "http://localhost:3000"],

@@ -8,20 +8,54 @@ datasource db {
 }
 
 model User {
-  id          Int      @id @default(autoincrement())
-  phoneNumber String   @unique
-  name        String?
-  email       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                 String    @id @default(uuid())
+  name               String?
+  email              String?   @unique
+  primary_phone_no   String    @unique @db.VarChar(10)
+  secondary_phone_no String?   @db.VarChar(10)
+  created_at         DateTime  @default(now())
+  created_by         String? //not necessary
+  modified_at        DateTime  @updatedAt
+  modified_by        String? //not necessary
+  deleted            Boolean   @default(false)
+  Address            Address[]
+
+  @@map("user")
 }
 
-model OTP {
-  id          Int      @id @default(autoincrement())
-  phoneNumber String
-  otp         String
-  createdAt   DateTime @default(now())
+model Address {
+  id              String   @id @default(uuid())
+  landmark        String?
+  address_line1   String
+  address_line2   String?
+  city            String
+  state           String
+  pin_code        String?
+  address_name    String
+  primary_address Boolean  @default(false)
+  user_id         String
+  user            User     @relation(fields: [user_id], references: [id])
+  created_at      DateTime @default(now())
+  created_by      String? //not necessary
+  modified_at     DateTime @updatedAt
+  modified_by     String //not necessary
+  deleted         Boolean  @default(false)
 
-  @@index([phoneNumber])
-  @@index([phoneNumber, otp])
+  @@map("address")
+}
+
+model Otp {
+  id              String   @id @default(uuid())
+  communicated_to String
+  otp             String
+  status          String
+  expiry_time     DateTime
+
+  created_at  DateTime @default(now())
+  created_by  String?
+  modified_at DateTime @updatedAt
+  modified_by String?
+  deleted     Boolean  @default(false)
+
+  @@map("otp")
 }

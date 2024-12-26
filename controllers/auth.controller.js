@@ -8,17 +8,21 @@ const OTP_VALIDITY_PERIOD = 1 * 60 * 1000; // 1 minutes
 
 const registerUserByPhone = catchAsyncError(async (req, res, next) => {
   const { phoneNumber } = req.body;
+
   if (!phoneNumber) {
     return next(new ErrorHandler("Please enter your phone number", 400));
   }
-
   const generatedOtp = generateOTP();
+  const expiryTime = new Date(Date.now() + OTP_VALIDITY_PERIOD);
 
-  await prismaClient.oTP.create({
+  const newOtp = await prismaClient.otp.create({
     data: {
-      phoneNumber,
+      communicated_to: phoneNumber,
       otp: generatedOtp,
-      createdAt: new Date(),
+      status: "SENT",
+      expiry_time: expiryTime,
+      created_by: phoneNumber, //not necessary
+      modified_by: phoneNumber, //not necessary
     },
   });
 
@@ -32,43 +36,50 @@ const registerUserByPhone = catchAsyncError(async (req, res, next) => {
 
 const verifyOtp = catchAsyncError(async (req, res, next) => {
   const { phoneNumber, otp } = req.body;
+
   if (!otp || !phoneNumber) {
     return next(
       new ErrorHandler("Please enter your OTP and phone number", 400)
     );
   }
 
-  const storedOtp = await prismaClient.oTP.findFirst({
-    where: { phoneNumber, otp },
+  const storedOtp = await prismaClient.otp.findFirst({
+    where: { communicated_to: phoneNumber, otp: otp, status: "SENT" },
   });
 
   if (!storedOtp) {
     return next(new ErrorHandler("Invalid OTP", 400));
   }
 
-  const isExpired =
-    new Date() - new Date(storedOtp.createdAt) > OTP_VALIDITY_PERIOD;
+  const isExpired = new Date() > new Date(storedOtp.expiry_time);
   if (isExpired) {
-    await prismaClient.oTP.delete({ where: { id: storedOtp.id } }); //delete otp after it expires
+    await prismaClient.otp.update({
+      where: { id: storedOtp.id },
+      data: { status: "EXPIRED" },
+    });
     return next(new ErrorHandler("OTP has expired", 400));
   }
 
-  //deleting the otp after success
-  await prismaClient.oTP.delete({ where: { id: storedOtp.id } });
+  await prismaClient.otp.update({
+    where: { id: storedOtp.id },
+    data: { status: "VERIFIED" },
+  });
 
-  let user = await prismaClient.user.findUnique({ where: { phoneNumber } });
+  let user = await prismaClient.user.findUnique({
+    where: { primary_phone_no: phoneNumber },
+  });
 
   if (!user) {
     user = await prismaClient.user.create({
       data: {
-        phoneNumber,
-        name: null,
-        email: null,
+        primary_phone_no: phoneNumber,
+        created_at: new Date(),
+        created_by: phoneNumber, //not necessary
       },
     });
   }
 
-  const tokenUser = { phone: user.phoneNumber };
+  const tokenUser = { phone: user.primary_phone_no };
   attachCookiesToResponse({ res, user: tokenUser });
 
   const isNewUser = !user.name && !user.email;
@@ -85,22 +96,18 @@ const addUserDetails = catchAsyncError(async (req, res, next) => {
   const phoneNumber = req.user.phone;
 
   if (!phoneNumber || !name || !email) {
-    return res.status(400).json({
-      success: false,
-      message: "Phone number, name, and email are required.",
-    });
+    return next(
+      new ErrorHandler("Phone number, name, and email are required.", 400)
+    );
   }
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
-    return res.status(400).json({
-      success: false,
-      message: "Invalid email format.",
-    });
+    return next(new ErrorHandler("Invalid email format.", 400));
   }
 
   const existingUser = await prismaClient.user.findUnique({
-    where: { phoneNumber },
+    where: { primary_phone_no: phoneNumber },
   });
 
   if (!existingUser) {
@@ -110,19 +117,27 @@ const addUserDetails = catchAsyncError(async (req, res, next) => {
     });
   }
 
+  if (existingUser.name && existingUser.email) {
+    return res.status(400).json({
+      success: false,
+      message: "User is already registered.",
+    });
+  }
+
   await prismaClient.user.update({
     where: { id: existingUser.id },
     data: {
-      name,
-      email,
-      updatedAt: new Date(),
+      name: existingUser.name || name,
+      email: existingUser.email || email,
+      primary_phone_no: phoneNumber,
+      modified_at: new Date(),
+      modified_by: phoneNumber, //not necessary
     },
   });
 
-  res.status(200).json({
-    success: true,
-    message: "User details added successfully.",
-  });
+  res
+    .status(201)
+    .json({ success: true, message: "User registered successfully." });
 });
 
 export { registerUserByPhone, verifyOtp, addUserDetails };
